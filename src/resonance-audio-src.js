@@ -53,9 +53,8 @@ AFRAME.registerComponent('resonance-audio-src', {
     // objects can be reused.
     this.mediaAudioSourceNodes = new Map()
 
-    // Update on entity change.
-    this.onEntityChange = this.onEntityChange.bind(this)
-    this.el.addEventListener('componentchanged', this.onEntityChange)
+    // Used for comparing position, rotation and scale on each tick.
+    this.contemporaryMatrixWorld = this.el.object3D.matrixWorld.clone()
   },
 
   update (oldData) {
@@ -93,8 +92,15 @@ AFRAME.registerComponent('resonance-audio-src', {
     }
   },
 
+  tick () {
+    // Update resonance and visualization position if necessary.
+    if (!this.contemporaryMatrixWorld.equals(this.el.object3D.matrixWorld)) {
+      this.updateResonancePosition().updateVisualization()
+      this.contemporaryMatrixWorld = this.el.object3D.matrixWorld.clone()
+    }
+  },
+
   remove () {
-    this.el.removeEventListener('componentchanged', this.onEntityChange)
     this.disconnect()
     const roomLeft = this.leaveRoom()
     this.toggleShowVisualization(this.data.visualize, false)
@@ -189,23 +195,11 @@ AFRAME.registerComponent('resonance-audio-src', {
       }
       const m = this.getMatrixLocal()
       v.position.setFromMatrixPosition(m)
-      v.quaternion.setFromRotationMatrix(m)
+      v.quaternion.setFromRotationMatrix(m) // TODO: can't we just clone the matrixWorld? (and compensate for scale) 
       v.material.color.setHex(this.room ? 0xffffff : 0xff0000)
       v.matrixWorldNeedsUpdate = true
     }
     return this
-  },
-
-  /**
-   * When the entity's position or rotation is changed, update the Resonance audio position and
-   * visualization accordingly.
-   * @param {Event} evt
-   */
-  onEntityChange (evt) {
-    if (evt.detail.name !== 'position' && evt.detail.name !== 'rotation') { return }
-
-    this.el.sceneEl.object3D.updateMatrixWorld(true)
-    this.updateResonancePosition().updateVisualization()
   },
 
   /**

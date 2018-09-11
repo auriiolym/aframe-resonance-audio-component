@@ -47,14 +47,13 @@ AFRAME.registerComponent('resonance-audio-room', {
     // Set up the room acoustics before the audio sources are set up.
     this.updateRoomAcoustics()
 
-    // Update on entity change.
-    this.onEntityChange = this.onEntityChange.bind(this)
-    this.el.addEventListener('componentchanged', this.onEntityChange)
-
     // When the scene has loaded and all world positions are calculated, update the visualization.
     onceWhenLoaded(this.el.sceneEl, () => {
       this.updateVisualization()
     })
+
+    // Used for comparing position, rotation and scale on each tick.
+    this.contemporaryMatrixWorld = this.el.object3D.matrixWorld.clone()
   },
 
   update (oldData) {
@@ -62,6 +61,18 @@ AFRAME.registerComponent('resonance-audio-room', {
     this.updateRoomAcoustics()
     this.toggleShowVisualization(oldData.visualize, this.data.visualize)
     this.updateVisualization()
+  },
+
+  tick () {
+    // Update resonance and visualization position if necessary.
+    // TODO: add check if src is child. If so, don't update (as it does this itself). 
+    if (!this.contemporaryMatrixWorld.equals(this.el.object3D.matrixWorld)) {
+      this.sources.forEach(source => {
+        if (source.data.room === '') { return }
+        source.updateResonancePosition()
+      })
+      this.contemporaryMatrixWorld = this.el.object3D.matrixWorld.clone()
+    }
   },
 
   tock () {
@@ -77,7 +88,6 @@ AFRAME.registerComponent('resonance-audio-room', {
   remove () {
     [...this.sources].map(source => source.leaveRoom())
     this.toggleShowVisualization(this.data.visualize, false)
-    this.el.removeEventListener('componentchanged', this.onEntityChange)
   },
 
   /**
@@ -141,17 +151,6 @@ AFRAME.registerComponent('resonance-audio-room', {
       this.toggleShowVisualization(false, true)
     }
     return this
-  },
-
-  /**
-   * When the entity's position or rotation is changed, update visualization and sources
-   * accordingly.
-   * @param {Event} evt
-   */
-  onEntityChange (evt) {
-    if (evt.detail.name !== 'position' && evt.detail.name !== 'rotation') { return }
-
-    this.sources.forEach(source => source.updateResonancePosition())
   },
 
   /**

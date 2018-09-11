@@ -1,6 +1,7 @@
 /* global setup, teardown, suite, test, expect, THREE, HTMLElement, HTMLMediaElement */
 require('aframe')
 require('../src/index.js')
+const AScene = require('aframe').AScene
 const { ResonanceAudio } = require('resonance-audio')
 const {
   sceneFactory,
@@ -50,6 +51,11 @@ suite(`component ${cs} in a ${cr}`, function () {
     srcEl2  position:   2  1  0
     srcEl2 cposition:   1  0 -1
     */
+    // Restore the A-Frame scene, because we're testing the result of the tick() lifecycle method
+    // in the test `${cs} changes` (`resonance-audio-src changes`).
+    AScene.prototype.render.restore()
+    AScene.prototype.resize.restore()
+    AScene.prototype.setupRenderer.restore()
 
     putOnPageAndWaitForLoad(
       sceneFactory([
@@ -247,18 +253,21 @@ suite(`component ${cs} in a ${cr}`, function () {
   })
 
   suite(`${cs} changes`, () => {
-    test('position and orientation update', () => {
+    test('position and orientation update', done => {
       srcEl1.setAttribute('position', '2 2 2') // in world coordinates: 4 3 2
       srcEl1.setAttribute('rotation', '0 90 0')
       document.querySelector('a-scene').object3D.updateMatrixWorld(true)
-      // Audio source in world coordinates (changed).
-      compareMatrixtoPosAndRot(srcEl1.object3D.matrixWorld, {x: 4, y: 3, z: 2}, {x: 0, y: 90, z: 0})
-      // Resonance Source in world coordinates (changed).
-      compareMatrixtoPosAndRot(component1.getMatrixWorld(), {x: 4, y: 3, z: 2}, {x: 0, y: 90, z: 0})
-      // Resonance Source in room coordinates (changed).
-      compareMatrixtoPosAndRot(createMatrixFromResonanceSource(component1.resonance), {x: 2, y: 2, z: 2}, {x: 0, y: 90, z: 0})
-      // Visualization in world coordinates (changed).
-      compareMatrixtoPosAndRot(srcEl1.getObject3D('audio-src').matrixWorld, {x: 4, y: 3, z: 2}, {x: 0, y: 90, z: 0})
+      process.nextTick(() => {
+        // Audio source in world coordinates (changed).
+        compareMatrixtoPosAndRot(srcEl1.object3D.matrixWorld, {x: 4, y: 3, z: 2}, {x: 0, y: 90, z: 0})
+        // Resonance Source in world coordinates (changed).
+        compareMatrixtoPosAndRot(component1.getMatrixWorld(), {x: 4, y: 3, z: 2}, {x: 0, y: 90, z: 0})
+        // Resonance Source in room coordinates (changed).
+        compareMatrixtoPosAndRot(createMatrixFromResonanceSource(component1.resonance), {x: 2, y: 2, z: 2}, {x: 0, y: 90, z: 0})
+        // Visualization in world coordinates (changed).
+        compareMatrixtoPosAndRot(srcEl1.getObject3D('audio-src').matrixWorld, {x: 4, y: 3, z: 2}, {x: 0, y: 90, z: 0})
+        done()
+      })
     })
   })
 
@@ -529,7 +538,8 @@ suite(`component ${crbb}`, () => {
   let roomComponent
   let srcEl
 
-  setup(done => {
+  setup(function (done) {
+    this.timeout(4000) // Give a bit more than 2000 ms for loading the model.
     /*
     Structure:
       <a-scene>
